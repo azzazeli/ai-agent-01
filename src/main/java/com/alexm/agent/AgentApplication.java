@@ -23,12 +23,19 @@ public class AgentApplication {
 
         // 3. Construct the Gemini-specific JSON payload
         String jsonPayload = """
-                {
-                  "contents": [{
-                    "parts": [{"text": "Hello! Please reply in exactly one short sentence."}]
+               {
+                 "systemInstruction": {
+                   "parts": [
+                     {
+                       "text": "You are a strict, terminal-only infrastructure assistant managing a home lab running Ubuntu. You never use markdown formatting. You only reply with the exact bash commands needed to solve the problem, followed by a one-sentence explanation."
+                     }
+                   ]
+                 },
+                 "contents": [{
+                    "parts": [{"text": "How do I check the logs for my Immich docker container?"}]
                   }]
-                }
-                """;
+               }
+               """;
 
         try {
             // 4. Build and send the HTTP request using native Java 11+ HttpClient
