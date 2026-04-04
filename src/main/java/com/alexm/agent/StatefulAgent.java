@@ -33,6 +33,36 @@ public class StatefulAgent {
                 .addObject()
                 .put("text", "You are a strict, terminal-only infrastructure assistant managing a home lab running Ubuntu. Keep answers concise.");
 
+        // --- 2.5 Define the Tools Schema ---
+        ArrayNode toolsArray = mapper.createArrayNode();
+        ObjectNode toolNode = mapper.createObjectNode();
+        ArrayNode functionDeclarations = mapper.createArrayNode();
+
+        ObjectNode checkStatusFunction = mapper.createObjectNode();
+        checkStatusFunction.put("name", "check_container_status");
+        checkStatusFunction.put("description", "Checks if a specific local docker container is running.");
+
+        // Define the parameters the LLM must provide to use this tool
+        ObjectNode parameters = mapper.createObjectNode();
+        parameters.put("type", "OBJECT");
+
+        ObjectNode properties = mapper.createObjectNode();
+        ObjectNode containerNameProp = mapper.createObjectNode();
+        containerNameProp.put("type", "STRING");
+        containerNameProp.put("description", "The name of the docker container to check (e.g., immich, paperless-ngx)");
+
+        properties.set("container_name", containerNameProp);
+        parameters.set("properties", properties);
+
+        ArrayNode required = mapper.createArrayNode();
+        required.add("container_name");
+        parameters.set("required", required);
+
+        checkStatusFunction.set("parameters", parameters);
+        functionDeclarations.add(checkStatusFunction);
+        toolNode.set("functionDeclarations", functionDeclarations);
+        toolsArray.add(toolNode);
+
         System.out.println("System initialized. Chat session started. Type 'exit' to quit.\n");
 
         // 3. The Execution Loop
@@ -55,6 +85,7 @@ public class StatefulAgent {
                 // --- B. Build the Final Payload ---
                 ObjectNode payload = mapper.createObjectNode();
                 payload.set("systemInstruction", systemInstruction);
+                payload.set("tools", toolsArray);
                 payload.set("contents", history); // The payload now grows with every loop
 
                 // --- C. Execute the Network Call ---
