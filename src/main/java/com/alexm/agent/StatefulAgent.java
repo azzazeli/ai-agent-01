@@ -100,20 +100,40 @@ public class StatefulAgent {
                 // --- D. Parse the Response ---
                 JsonNode rootNode = mapper.readTree(response.body());
 
-                // Navigate the Gemini JSON structure to extract just the text response
-                String assistantText = rootNode.path("candidates").path(0)
-                        .path("content").path("parts").path(0)
-                        .path("text").asText();
+                // Navigate to the first "part" of the response
+                JsonNode firstPart = rootNode.path("candidates").path(0)
+                        .path("content").path("parts").path(0);
 
-                System.out.println("Agent: " + assistantText + "\n");
+                if (firstPart.has("functionCall")) {
+                    JsonNode functionCall = firstPart.path("functionCall");
+                    String functionName = functionCall.path("name").asText();
 
-                // --- E. Append Assistant Response to History ---
-                ObjectNode assistantMessage = mapper.createObjectNode();
-                assistantMessage.put("role", "model");
-                assistantMessage.putArray("parts").addObject().put("text", assistantText);
-                history.add(assistantMessage);
+                    // Extract the specific argument we defined in our schema
+                    String containerName = functionCall.path("args").path("container_name").asText();
 
+                    System.out.println("\n>>> [SYSTEM: TOOL CALL DETECTED] <<<");
+                    System.out.println("The agent wants to run: " + functionName);
+                    System.out.println("Target Container: " + containerName);
+                    System.out.println("------------------------------------\n");
 
+                    // Note: We are NOT appending this to history yet.
+                    // We will handle the complex history logic for tools on Day 11.
+
+                }
+                // 2. Otherwise, handle it as a standard text conversation
+                else if (firstPart.has("text")) {
+                    String assistantText = firstPart.path("text").asText();
+                    System.out.println("Agent: " + assistantText + "\n");
+
+                    // Append Assistant Response to History
+                    ObjectNode assistantMessage = mapper.createObjectNode();
+                    assistantMessage.put("role", "model");
+                    assistantMessage.putArray("parts").addObject().put("text", assistantText);
+                    history.add(assistantMessage);
+
+                } else {
+                    System.out.println("Received an unknown response format.");
+                }
             } catch (Exception e) {
                 System.err.println("Error communicating with API: " + e.getMessage());
             }
