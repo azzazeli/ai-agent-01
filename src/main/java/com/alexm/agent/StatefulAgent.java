@@ -5,14 +5,20 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Scanner;
+import java.util.stream.Collectors;
 
 public class StatefulAgent {
     public static void main(String[] args) {
+        System.out.println(executeLocalCommand("immich"));
+        System.exit(0); // Stop the program here temporarily
+
         String apiKey = System.getenv("GEMINI_API_KEY");
         if (apiKey == null || apiKey.isEmpty()) {
             System.err.println("Error: GEMINI_API_KEY environment variable not set.");
@@ -137,8 +143,36 @@ public class StatefulAgent {
             } catch (Exception e) {
                 System.err.println("Error communicating with API: " + e.getMessage());
             }
-
         }
-
     }
+
+    public static String executeLocalCommand(String containerName) {
+        System.out.println("[SYSTEM] Executing local check for: " + containerName);
+        try {
+            // Using a list of arguments is safer than a raw bash string
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    "docker", "ps", "--filter", "name=" + containerName, "--format", "{{.Names}} - Status: {{.Status}}"
+            );
+            // Redirect error stream so we can see if docker fails (e.g., permissions)
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
+
+            // Read the terminal output
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String output = reader.lines().collect(Collectors.joining("\n"));
+
+            int exitCode = process.waitFor();
+
+            if (output.trim().isEmpty()) {
+                return "Container '" + containerName + "' is not currently running or does not exist.";
+            }
+
+            return output;
+        } catch (Exception e) {
+            return "Error executing command: " + e.getMessage();
+        }
+    }
+
 }
+
+
