@@ -16,9 +16,6 @@ import java.util.stream.Collectors;
 
 public class StatefulAgent {
     public static void main(String[] args) {
-        System.out.println(executeLocalCommand("immich"));
-        System.exit(0); // Stop the program here temporarily
-
         String apiKey = System.getenv("GEMINI_API_KEY");
         if (apiKey == null || apiKey.isEmpty()) {
             System.err.println("Error: GEMINI_API_KEY environment variable not set.");
@@ -113,18 +110,69 @@ public class StatefulAgent {
                 if (firstPart.has("functionCall")) {
                     JsonNode functionCall = firstPart.path("functionCall");
                     String functionName = functionCall.path("name").asText();
-
-                    // Extract the specific argument we defined in our schema
                     String containerName = functionCall.path("args").path("container_name").asText();
-
                     System.out.println("\n>>> [SYSTEM: TOOL CALL DETECTED] <<<");
-                    System.out.println("The agent wants to run: " + functionName);
-                    System.out.println("Target Container: " + containerName);
+                    System.out.println("The agent is executing: " + functionName + " for '" + containerName + "'");
+
+                    // --- STEP A: Run the Local Command ---
+                    String commandResult = executeLocalCommand(containerName);
+                    System.out.println("Command Output: " + commandResult);
                     System.out.println("------------------------------------\n");
 
-                    // Note: We are NOT appending this to history yet.
-                    // We will handle the complex history logic for tools on Day 11.
+                    // --- STEP B: Update History with the Model's Request ---
+                    // The LLM needs to see its own functionCall in the history
+                    ObjectNode modelToolCallMessage = mapper.createObjectNode();
+                    modelToolCallMessage.put("role", "model");
+                    modelToolCallMessage.putArray("parts").add(firstPart);
+                    history.add(modelToolCallMessage);
 
+                    // --- STEP C: Format the Result as a functionResponse ---
+                    ObjectNode functionMessage = mapper.createObjectNode();
+                    functionMessage.put("role", "function"); // Gemini uses "function" for tool returns
+
+                    ObjectNode functionResponseNode = mapper.createObjectNode();
+                    functionResponseNode.put("name", functionName);
+
+                    // Put the raw Docker string into a JSON object for the model to read
+                    ObjectNode responseData = mapper.createObjectNode();
+                    responseData.put("result", commandResult);
+                    functionResponseNode.set("response", responseData);
+
+                    ObjectNode partNode = mapper.createObjectNode();
+                    partNode.set("functionResponse", functionResponseNode);
+
+                    functionMessage.putArray("parts").add(partNode);
+                    history.add(functionMessage); // Add our execution result to the history
+
+                    // --- STEP D: The Second HTTP Call (The Return Trip) ---
+                    System.out.println("[SYSTEM] Sending execution result back to Gemini...");
+
+                    ObjectNode secondPayload = mapper.createObjectNode();
+                    secondPayload.set("systemInstruction", systemInstruction);
+                    secondPayload.set("tools", toolsArray);
+                    secondPayload.set("contents", history);
+
+                    HttpRequest secondRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(url))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(secondPayload.toString()))
+                            .build();
+
+                    HttpResponse<String> secondResponse = client.send(secondRequest, HttpResponse.BodyHandlers.ofString());
+
+                    // --- STEP E: Parse the Final Human-Readable Answer ---
+                    JsonNode secondRootNode = mapper.readTree(secondResponse.body());
+                    String finalAssistantText = secondRootNode.path("candidates").path(0)
+                            .path("content").path("parts").path(0)
+                            .path("text").asText();
+
+                    System.out.println("Agent: " + finalAssistantText + "\n");
+
+                    // Append the final answer to history so the loop continues normally
+                    ObjectNode finalAssistantMessage = mapper.createObjectNode();
+                    finalAssistantMessage.put("role", "model");
+                    finalAssistantMessage.putArray("parts").addObject().put("text", finalAssistantText);
+                    history.add(finalAssistantMessage);
                 }
                 // 2. Otherwise, handle it as a standard text conversation
                 else if (firstPart.has("text")) {
@@ -166,6 +214,7 @@ public class StatefulAgent {
             if (output.trim().isEmpty()) {
                 return "Container '" + containerName + "' is not currently running or does not exist.";
             }
+            System.out.println("Terminal output: " + output );
 
             return output;
         } catch (Exception e) {
