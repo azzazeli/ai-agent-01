@@ -19,7 +19,7 @@ public class AgentApplication {
         }
 
         // 2. Set the API endpoint (Gemini passes the key in the URL)
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey;
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey;
 
         // 3. Construct the Gemini-specific JSON payload
         String jsonPayload = """
