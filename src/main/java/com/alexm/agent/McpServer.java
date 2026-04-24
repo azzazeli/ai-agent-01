@@ -40,10 +40,64 @@ public class McpServer {
 
         if ("initialize".equals(method)) {
             sendInitializeResponse(id);
+        } else if ("tools/list".equals(method)) {
+            sendToolsListResponse(id);
         } else {
             // Day 15+ will handle other methods here
             System.err.println("[McpServer] Unknown method: " + method);
         }
+    }
+
+    private static void sendToolsListResponse(JsonNode id) {
+        ObjectNode response = mapper.createObjectNode();
+        response.put("jsonrpc", "2.0");
+        response.set("id", id);
+
+        // --- Tool 1: check_container_status (from Day 8) ---
+        ObjectNode tool1 = mapper.createObjectNode();
+        tool1.put("name", "check_container_status");
+        tool1.put("description", "Checks if a specific local Docker container is running.");
+
+        ObjectNode tool1Params = mapper.createObjectNode();
+        tool1Params.put("type", "object");
+
+        ObjectNode tool1Properties = mapper.createObjectNode();
+        ObjectNode containerNameProp = mapper.createObjectNode();
+        containerNameProp.put("type", "string");
+        containerNameProp.put("description", "The name of the Docker container to check, e.g. immich_server");
+        tool1Properties.set("container_name", containerNameProp);
+
+        tool1Params.set("properties", tool1Properties);
+        tool1Params.set("required", mapper.createArrayNode().add("container_name"));
+        tool1.set("inputSchema", tool1Params);
+
+        // --- Tool 2: list_immich_albums ---
+        ObjectNode tool2 = mapper.createObjectNode();
+        tool2.put("name", "list_immich_albums");
+        tool2.put("description", "Returns a list of albums from the local Immich instance.");
+
+        ObjectNode tool2Params = mapper.createObjectNode();
+        tool2Params.put("type", "object");
+        tool2Params.set("properties", mapper.createObjectNode()); // no parameters required
+        tool2Params.set("required", mapper.createArrayNode());
+        tool2.set("inputSchema", tool2Params);
+
+        var toolsArray = mapper.createArrayNode();
+        toolsArray.add(tool1);
+        toolsArray.add(tool2);
+
+        ObjectNode result = mapper.createObjectNode();
+        result.set("tools", toolsArray);
+
+        response.set("result", result);
+
+        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+//        String json = mapper.writeValueAsString(response); // MCP host expect a single line
+        System.out.println(json);
+        System.out.flush();
+
+        System.err.println("[McpServer] Sent tools/list response with " + toolsArray.size() + " tools.");
+
     }
 
     private static void sendInitializeResponse(JsonNode id) {
