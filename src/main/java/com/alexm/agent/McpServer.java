@@ -91,8 +91,8 @@ public class McpServer {
 
         response.set("result", result);
 
-        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
-//        String json = mapper.writeValueAsString(response); // MCP host expect a single line
+//        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+        String json = mapper.writeValueAsString(response); // MCP host expect a single line
         System.out.println(json);
         System.out.flush();
 
