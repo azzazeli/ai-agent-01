@@ -4,6 +4,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.Scanner;
 
 public class McpServer {
@@ -42,11 +46,114 @@ public class McpServer {
             sendInitializeResponse(id);
         } else if ("tools/list".equals(method)) {
             sendToolsListResponse(id);
-        } else {
+        } else if ("tools/call".equals(method)) {
+            handleToolCall(request, id);
+        }else {
             // Day 15+ will handle other methods here
             System.err.println("[McpServer] Unknown method: " + method);
         }
     }
+
+    private static void handleToolCall(JsonNode request, JsonNode id) {
+        String toolName = request.path("params").path("name").asText("");
+        JsonNode arguments = request.path("params").path("arguments");
+
+        System.err.println("[McpServer] Tool call: " + toolName);
+
+        String toolResult;
+        if ("check_container_status".equals(toolName)) {
+            String containerName = arguments.path("container_name").asText("immich");
+            toolResult = executeLocalCommand(containerName);
+        } else if ("list_immich_albums".equals(toolName)) {
+            toolResult = listImmichAlbums();
+        } else {
+            // Unknown tool — Day 17 will handle this properly with a JSON-RPC error
+            toolResult = "Unknown tool: " + toolName;
+        }
+        sendToolResult(id, toolResult);
+    }
+
+    private static void sendToolResult(JsonNode id, String result) {
+        ObjectNode response = mapper.createObjectNode();
+        response.put("jsonrpc", "2.0");
+        response.set("id", id);
+
+        // MCP tool result format: content array with a text block
+        ObjectNode textContent = mapper.createObjectNode();
+        textContent.put("type", "text");
+        textContent.put("text", result);
+
+        var contentArray = mapper.createArrayNode();
+        contentArray.add(textContent);
+
+        ObjectNode resultNode = mapper.createObjectNode();
+        resultNode.set("content", contentArray);
+
+        response.set("result", resultNode);
+
+        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+//        String json = mapper.writeValueAsString(response);
+        System.out.println(json);
+        System.out.flush();
+
+        System.err.println("[McpServer] Sent tool result for: " + id);
+    }
+
+    private static String listImmichAlbums() {
+        String apiKey = System.getenv("IMMICH_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
+            return "Error: IMMICH_API_KEY environment variable is not set.";
+        }
+
+        // Adjust the host/port to match your local Immich Docker setup
+        String immichUrl = System.getenv().getOrDefault("IMMICH_URL", "http://localhost:2283");
+
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(immichUrl + "/api/albums"))
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .header("x-api-key", apiKey)
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                return "Immich API error: HTTP " + response.statusCode();
+            }
+
+            JsonNode albums = mapper.readTree(response.body());
+            StringBuilder sb = new StringBuilder();
+            sb.append("Found ").append(albums.size()).append(" album(s):\n");
+            for (JsonNode album : albums) {
+                String name = album.path("albumName").asText("(unnamed)");
+                int count = album.path("assetCount").asInt(0);
+                sb.append("  - ").append(name).append(" (").append(count).append(" assets)\n");
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            return "Error calling Immich API: " + e.getMessage();
+        }
+    }
+
+    private static String executeLocalCommand(String containerName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "docker", "ps", "--filter", "name=" + containerName, "--format", "{{.Names}}\t{{.Status}}"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            String output = new String(process.getInputStream().readAllBytes());
+            process.waitFor();
+            return output.isBlank() ? "Container '" + containerName + "' is not running." : output.trim();
+        } catch (Exception e) {
+            return "Error executing command: " + e.getMessage();
+        }
+    }
+
+
 
     private static void sendToolsListResponse(JsonNode id) {
         ObjectNode response = mapper.createObjectNode();
