@@ -32,6 +32,7 @@ public class McpServer {
                     handleRequest(request);
                 } catch (Exception e) {
                     System.err.println("[McpServer] Failed to parse JSON: " + e.getMessage());
+                    sendErrorResponse(null, -32600, "Internal error");
                 }
             }
         }
@@ -48,9 +49,9 @@ public class McpServer {
             sendToolsListResponse(id);
         } else if ("tools/call".equals(method)) {
             handleToolCall(request, id);
-        }else {
-            // Day 15+ will handle other methods here
+        } else {
             System.err.println("[McpServer] Unknown method: " + method);
+            sendErrorResponse(id, -32601, "Method not found:" + method);
         }
     }
 
@@ -67,8 +68,8 @@ public class McpServer {
         } else if ("list_immich_albums".equals(toolName)) {
             toolResult = listImmichAlbums();
         } else {
-            // Unknown tool — Day 17 will handle this properly with a JSON-RPC error
-            toolResult = "Unknown tool: " + toolName;
+            sendErrorResponse(id, -32601, "Unknown tool: " + toolName);
+            return;
         }
         sendToolResult(id, toolResult);
     }
@@ -154,7 +155,6 @@ public class McpServer {
     }
 
 
-
     private static void sendToolsListResponse(JsonNode id) {
         ObjectNode response = mapper.createObjectNode();
         response.put("jsonrpc", "2.0");
@@ -234,5 +234,29 @@ public class McpServer {
         System.out.flush();
 
         System.err.println("[McpServer] Sent initialize response.");
+    }
+
+    private static void sendErrorResponse(JsonNode id, int code, String message) {
+        ObjectNode response = mapper.createObjectNode();
+        response.put("jsonrpc", "2.0");
+
+        // id can be null if the request was so malformed we couldn't parse it
+        if (id != null && !id.isNull()) {
+            response.set("id", id);
+        } else {
+            response.putNull("id");
+        }
+
+        ObjectNode error = mapper.createObjectNode();
+        error.put("code", code);
+        error.put("message", message);
+        response.set("error", error);
+
+        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+//        String json = mapper.writeValueAsString(response);
+        System.out.println(json);
+        System.out.flush();
+
+        System.err.println("[McpServer] Sent error response: " + code + " " + message);
     }
 }
