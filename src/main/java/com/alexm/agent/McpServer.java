@@ -32,7 +32,7 @@ public class McpServer {
                     handleRequest(request);
                 } catch (Exception e) {
                     System.err.println("[McpServer] Failed to parse JSON: " + e.getMessage());
-                    sendErrorResponse(null, -32600, "Internal error");
+                    sendErrorResponse(null, -32700, "Internal error");
                 }
             }
         }
