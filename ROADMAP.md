@@ -12,15 +12,16 @@
 |-----------|--------|---------|
 | M1 — Theory & Hello World Agent | **Done** | Week 1 all checked. Google Agent Fundamentals course passed. Native `HttpClient` sending prompts, system persona injection working. |
 | M2 — Bare Metal Agent Loop & Tool Calling | **Done** | Week 2 all checked. `while(true)` loop, Jackson memory (`ArrayNode`), `check_container_status` tool schema, `functionCall` parsing, `ProcessBuilder` execution, two-pass LLM round-trip, live testing with Immich container confirmed. |
+| M3 — Raw MCP Server | **Done** | Week 3 complete. `McpServer.java` with full JSON-RPC 2.0 stdio loop, `initialize` handshake, `tools/list` advertising 2 tools, `tools/call` executing Docker and Immich REST API, proper error responses. All 8 manual tests passed. |
 
 ### 🔄 In Progress
 | Milestone | Status | Notes |
 |-----------|--------|-------|
-| M3 — Raw MCP Server | **Week 3 started** | `McpServer.java` structure planned. Days 13–18 not yet started. |
+| M4 — MCP Client Integration | **Week 4 starting** | Agent will spawn `McpServer` as child process and discover tools dynamically via protocol. |
 
 ### ⏳ Upcoming
-- M4 — MCP Client & External Integration
 - M5 — Framework Leap (Spring AI)
+- M6 — Home Lab Capstone
 
 ---
 
@@ -64,7 +65,7 @@
 
 ---
 
-### 🔄 MILESTONE 3 — Raw MCP Server *(Current — Week 3)*
+### ✅ MILESTONE 3 — Raw MCP Server *(Complete)*
 > Decoupling: JSON-RPC 2.0 over stdio, MCP protocol by hand
 
 **Why this matters:** Before using any MCP library, you'll have handwritten every message the protocol sends. This gives you permanent intuition for debugging any MCP integration later.
@@ -84,7 +85,7 @@
 
 ---
 
-### ⏳ MILESTONE 4 — MCP Client Integration *(~Week 4)*
+### 🔄 MILESTONE 4 — MCP Client Integration *(Current — Week 4)*
 > Your agent becomes an MCP host: process spawning, dynamic tool discovery
 
 **The transformation:** Your Week 2 agent stops hardcoding tools. Instead it spawns `McpServer.java` as a child process, discovers its tools via the protocol, and passes them dynamically to Gemini.
@@ -171,4 +172,4 @@ No need for a new repo — the learning progression lives cleanly in one place.
 
 ---
 
-*Last updated: April 2026 · Current position: Start of Milestone 3, Day 13*
+*Last updated: April 2026 · Current position: Start of Milestone 4, Day 19*
