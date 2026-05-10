@@ -92,8 +92,8 @@ public class McpServer {
 
         response.set("result", resultNode);
 
-        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
-//        String json = mapper.writeValueAsString(response);
+//        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+        String json = mapper.writeValueAsString(response);
         System.out.println(json);
         System.out.flush();
 
@@ -252,8 +252,8 @@ public class McpServer {
         error.put("message", message);
         response.set("error", error);
 
-        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
-//        String json = mapper.writeValueAsString(response);
+//        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+        String json = mapper.writeValueAsString(response);
         System.out.println(json);
         System.out.flush();
 
