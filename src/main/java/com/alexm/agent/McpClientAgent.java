@@ -1,12 +1,19 @@
 package com.alexm.agent;
 
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 
 public class McpClientAgent {
     private static final ObjectMapper mapper = new ObjectMapper();
+    private static int requestId = 1;
 
     public static void main(String[] args) throws Exception {
         System.out.println("[Agent] Starting MCP Client Agent...");
@@ -16,30 +23,106 @@ public class McpClientAgent {
         BufferedWriter toServer = new BufferedWriter(new OutputStreamWriter(mcpServer.getOutputStream()));
         BufferedReader fromServer = new BufferedReader(new InputStreamReader(mcpServer.getInputStream()));
 
-        // Verify the pipe works: send a raw initialize request and read back the response
-        System.out.println("[Agent] Server spawned. Testing communication...");
+        // Step 1: Handshake
+        performHandshake(toServer, fromServer);
 
-        String initRequest = """
-            {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"mcp-client-agent","version":"1.0"}}}
-            """.strip();
-
-        sendRequest(toServer, initRequest);
-
-        String response = readResponse(fromServer);
-
-        System.out.println("[Agent] Server responded: " + response);
-
-        JsonNode json = mapper.readTree(response);
-        String serverName = json.path("result").path("serverInfo").path("name").asText("unknown");
-        String version = json.path("result").path("protocolVersion").asText("unknown");
-
-        System.out.println("[Agent] Handshake confirmed — server: " + serverName + ", protocol: " + version);
+        // Step 2: Discover tools and convert to Gemini format
+        ArrayNode geminiTools = discoverTools(toServer, fromServer);
+        System.out.println("[Agent] Gemini-ready tool declarations:");
+        System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(geminiTools));
 
         // Clean up
         mcpServer.destroy();
-        System.out.println("[Agent] Server process terminated.");
-
+        System.out.println("[Agent] Done.");
     }
+
+    // -------------------------------------------------------------------------
+    // Protocol steps
+    // -------------------------------------------------------------------------
+
+    private static void performHandshake(BufferedWriter toServer, BufferedReader fromServer) throws Exception {
+        ObjectNode request = buildRequest("initialize");
+        ObjectNode params = mapper.createObjectNode();
+        params.put("protocolVersion", "2024-11-05");
+        ObjectNode clientInfo = mapper.createObjectNode();
+        clientInfo.put("name", "mcp-client-agent");
+        clientInfo.put("version", "1.0");
+        params.set("clientInfo", clientInfo);
+        request.set("params", params);
+
+        sendRequest(toServer, mapper.writeValueAsString(request));
+        JsonNode response = mapper.readTree(readResponse(fromServer));
+
+        String serverName = response.path("result").path("serverInfo").path("name").asText("unknown");
+        String protocol = response.path("result").path("protocolVersion").asText("unknown");
+        System.out.println("[Agent] Handshake OK — server: " + serverName + ", protocol: " + protocol);
+    }
+
+    private static ArrayNode discoverTools(BufferedWriter toServer, BufferedReader fromServer) throws Exception {
+        ObjectNode request = buildRequest("tools/list");
+
+        sendRequest(toServer, mapper.writeValueAsString(request));
+        JsonNode response = mapper.readTree(readResponse(fromServer));
+
+        JsonNode mcpTools = response.path("result").path("tools");
+        System.out.println("[Agent] Discovered " + mcpTools.size() + " tool(s) from MCP server.");
+
+        return convertToGeminiDeclarations(mcpTools);
+    }
+
+    // -------------------------------------------------------------------------
+    // Schema conversion: MCP inputSchema → Gemini functionDeclaration
+    // -------------------------------------------------------------------------
+
+    static ArrayNode convertToGeminiDeclarations(JsonNode mcpTools) {
+        ArrayNode declarations = mapper.createArrayNode();
+
+        for (JsonNode tool : mcpTools) {
+            ObjectNode declaration = mapper.createObjectNode();
+            declaration.put("name", tool.path("name").asText());
+            declaration.put("description", tool.path("description").asText());
+
+            JsonNode inputSchema = tool.path("inputSchema");
+            declaration.set("parameters", convertSchema(inputSchema));
+
+            declarations.add(declaration);
+        }
+
+        return declarations;
+    }
+
+    private static ObjectNode convertSchema(JsonNode mcpSchema) {
+        ObjectNode geminiSchema = mapper.createObjectNode();
+
+        // Gemini requires uppercase type names
+        String type = mcpSchema.path("type").asText("object").toUpperCase();
+        geminiSchema.put("type", type);
+
+        // Recursively convert properties
+        if (mcpSchema.has("properties")) {
+            ObjectNode geminiProperties = mapper.createObjectNode();
+            mcpSchema.path("properties").properties().forEach(entry -> {
+                ObjectNode prop = mapper.createObjectNode();
+                prop.put("type", entry.getValue().path("type").asText("string").toUpperCase());
+                if (entry.getValue().has("description")) {
+                    prop.put("description", entry.getValue().path("description").asText());
+                }
+                geminiProperties.set(entry.getKey(), prop);
+            });
+            geminiSchema.set("properties", geminiProperties);
+        }
+
+        // Preserve required array as-is
+        if (mcpSchema.has("required")) {
+            geminiSchema.set("required", mcpSchema.path("required"));
+        }
+
+        return geminiSchema;
+    }
+
+    // -------------------------------------------------------------------------
+    // Process management
+    // -------------------------------------------------------------------------
 
     private static Process spawnMcpServer() throws Exception {
         String javaExecutable = ProcessHandle.current()
@@ -55,9 +138,9 @@ public class McpClientAgent {
                 "com.alexm.agent.McpServer"
         );
 
-        // Server's stderr flows to our stderr so we can see its debug logs
         pb.redirectErrorStream(false);
-        pb.inheritIO().redirectInput(ProcessBuilder.Redirect.PIPE)
+        pb.inheritIO()
+                .redirectInput(ProcessBuilder.Redirect.PIPE)
                 .redirectOutput(ProcessBuilder.Redirect.PIPE);
 
         Process process = pb.start();
@@ -65,11 +148,23 @@ public class McpClientAgent {
         return process;
     }
 
-    private static void sendRequest(BufferedWriter writer, String json) throws IOException {
+    // -------------------------------------------------------------------------
+    // Communication helpers
+    // -------------------------------------------------------------------------
+
+    private static ObjectNode buildRequest(String method) {
+        ObjectNode request = mapper.createObjectNode();
+        request.put("jsonrpc", "2.0");
+        request.put("id", requestId++);
+        request.put("method", method);
+        return request;
+    }
+
+    static void sendRequest(BufferedWriter writer, String json) throws Exception {
         writer.write(json);
         writer.newLine();
         writer.flush();
-        System.out.println("[Agent] Sent: " + json);
+        System.out.println("[Agent] → " + json);
     }
 
     static String readResponse(BufferedReader reader) throws Exception {
@@ -77,7 +172,7 @@ public class McpClientAgent {
         while ((line = reader.readLine()) != null) {
             line = line.trim();
             if (!line.isEmpty()) {
-                System.out.println("[Agent] Received: " + line);
+                System.out.println("[Agent] ← " + line);
                 return line;
             }
         }
