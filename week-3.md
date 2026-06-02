@@ -4,9 +4,9 @@
 **Time Commitment:** 20-30 minutes per day.
 
 ### Day 13: Project Setup & The Stdio Loop
-- [ ] Create a completely new, separate Java application class (e.g., `McpServer.java`).
-- [ ] Write a `while(true)` loop that uses `Scanner` to read lines from `System.in`. 
-- [ ] **Crucial:** From this point on, you can NEVER use `System.out.println` for debugging, as it will corrupt the protocol. Use `System.err.println` for all your logs.
+- [x] Create a completely new, separate Java application class (e.g., `McpServer.java`).
+- [x] Write a `while(true)` loop that uses `Scanner` to read lines from `System.in`. 
+- [x] **Crucial:** From this point on, you can NEVER use `System.out.println` for debugging, as it will corrupt the protocol. Use `System.err.println` for all your logs.
 
 ### Day 14: The Initialization Handshake
 - [ ] Read incoming strings as JSON. Check if the JSON-RPC request method is `initialize`.
