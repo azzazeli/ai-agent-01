@@ -1,5 +1,9 @@
 package com.alexm.agent.mcp;
 
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
 import java.util.Scanner;
 
 public class McpServer {
@@ -8,6 +12,8 @@ public class McpServer {
         System.err.println("[SERVER] Listening for JSON-RPC messages on stdin...");
 
         Scanner scanner = new Scanner(System.in);
+        ObjectMapper mapper = new ObjectMapper();
+
         while (scanner.hasNextLine()) {
             String inputLine = scanner.nextLine();
             if (inputLine.trim().isEmpty()) {
@@ -15,6 +21,49 @@ public class McpServer {
             }
 
             System.err.println("[SERVER] Received payload: " + inputLine);
+            try {
+                // 1. Parse the incoming string into a JSON tree
+                JsonNode requestNode = mapper.readTree(inputLine);
+                // 2. Ensure it has a "method" field
+                if (requestNode.has("method")) {
+                    String method = requestNode.get("method").asText();
+                    JsonNode idNode = requestNode.get("id"); // We must echo this exact ID back
+                    // 3. Handle the "initialize" handshake
+                    if ("initialize".equals(method)) {
+                        System.err.println("[SERVER] Handshake requested. Sending capabilities...");
+
+                        // Build the JSON-RPC response
+                        ObjectNode response = mapper.createObjectNode();
+                        response.put("jsonrpc", "2.0");
+                        if (idNode != null) {
+                            response.set("id", idNode); // Match the client's request ID
+                        }
+
+                        // Build the "result" payload required by MCP
+                        ObjectNode result = mapper.createObjectNode();
+                        result.put("protocolVersion", "2024-11-05"); // The official MCP protocol version
+
+                        ObjectNode capabilities = mapper.createObjectNode();
+                        // An empty object for "tools" tells the client: "I support tools"
+                        capabilities.set("tools", mapper.createObjectNode());
+                        result.set("capabilities", capabilities);
+
+                        ObjectNode serverInfo = mapper.createObjectNode();
+                        serverInfo.put("name", "HomeLabMCP");
+                        serverInfo.put("version", "1.0.0");
+                        result.set("serverInfo", serverInfo);
+
+                        response.set("result", result);
+
+                        // CRITICAL: Send the JSON response to standard output!
+                        System.out.println(response.toString());
+                    }
+                }
+
+            } catch (Exception e) {
+                // Log parsing errors to stderr so we don't break the stdout pipe
+                System.err.println("[SERVER] Error parsing JSON: " + e.getMessage());
+            }
 
         }
 
