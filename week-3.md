@@ -9,14 +9,14 @@
 - [x] **Crucial:** From this point on, you can NEVER use `System.out.println` for debugging, as it will corrupt the protocol. Use `System.err.println` for all your logs.
 
 ### Day 14: The Initialization Handshake
-- [ ] Read incoming strings as JSON. Check if the JSON-RPC request method is `initialize`.
-- [ ] If it is, write the code to construct a JSON-RPC response confirming your server's capabilities.
-- [ ] Print this JSON response exactly to `System.out`.
+- [x] Read incoming strings as JSON. Check if the JSON-RPC request method is `initialize`.
+- [x] If it is, write the code to construct a JSON-RPC response confirming your server's capabilities.
+- [x] Print this JSON response exactly to `System.out`.
 
 ### Day 15: Exposing Tools (`tools/list`)
-- [ ] Add an `if/else` block to check if the incoming request method is `tools/list`.
-- [ ] If it is, move the JSON schema you wrote on Day 8 (`check_container_status`) into this server. 
-- [ ] Format it according to the MCP specification and print it to `System.out`.
+- [x] Add an `if/else` block to check if the incoming request method is `tools/list`.
+- [x] If it is, move the JSON schema you wrote on Day 8 (`check_container_status`) into this server. 
+- [x] Format it according to the MCP specification and print it to `System.out`.
 
 ### Day 16: Executing Tools (`tools/call`)
 - [ ] Add a block to check if the incoming method is `tools/call`.
