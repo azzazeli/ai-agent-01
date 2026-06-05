@@ -5,7 +5,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.Scanner;
+import java.util.stream.Collectors;
 
 public class McpServer {
     public static void main(String[] args) {
@@ -101,6 +104,47 @@ public class McpServer {
                         // CRITICAL: Send the JSON response to standard output!
                         System.out.println(response.toString());
                     }
+                    else if ("tools/call".equals(method)) {
+                        System.err.println("[SERVER] Client requested tool execution...");
+
+                        JsonNode params = requestNode.get("params");
+                        String toolName = params.get("name").asText();
+                        JsonNode arguments = params.get("arguments");
+
+                        ObjectNode response = mapper.createObjectNode();
+                        response.put("jsonrpc", "2.0");
+                        if (idNode != null) {
+                            response.set("id", idNode);
+                        }
+
+                        if ("check_container_status".equals(toolName)) {
+                            // Extract the argument provided by the LLM
+                            String containerName = arguments.get("container_name").asText();
+                            System.err.println("[SERVER] Executing check for container: " + containerName);
+
+                            // Call the local native method
+                            String resultText = executeLocalCommand(containerName);
+
+                            // Build the MCP expected result format (Array of content blocks)
+                            ObjectNode result = mapper.createObjectNode();
+                            ArrayNode contentArray = mapper.createArrayNode();
+
+                            ObjectNode textContent = mapper.createObjectNode();
+                            textContent.put("type", "text");
+                            textContent.put("text", resultText); // The raw Docker output
+
+                            contentArray.add(textContent);
+                            result.set("content", contentArray);
+
+                            response.set("result", result);
+                            // CRITICAL: Send the JSON response to standard output!
+                            System.out.println(response.toString());
+                        }
+                        else {
+                            // A placeholder for Day 17: Error handling
+                            System.err.println("[SERVER] Unknown tool requested.");
+                        }
+                    }
                 }
 
             } catch (Exception e) {
@@ -109,6 +153,34 @@ public class McpServer {
             }
 
         }
-
     }
+
+    public static String executeLocalCommand(String containerName) {
+        System.out.println("[SYSTEM] Executing local check for: " + containerName);
+        try {
+            // Using a list of arguments is safer than a raw bash string
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    "docker", "ps", "--filter", "name=" + containerName, "--format", "{{.Names}} - Status: {{.Status}}"
+            );
+            // Redirect error stream so we can see if docker fails (e.g., permissions)
+            processBuilder.redirectErrorStream(true);
+            Process process = processBuilder.start();
+
+            // Read the terminal output
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String output = reader.lines().collect(Collectors.joining("\n"));
+
+            int exitCode = process.waitFor();
+
+            if (output.trim().isEmpty()) {
+                return "Container '" + containerName + "' is not currently running or does not exist.";
+            }
+            System.out.println("Terminal output: " + output );
+
+            return output;
+        } catch (Exception e) {
+            return "Error executing command: " + e.getMessage();
+        }
+    }
+
 }

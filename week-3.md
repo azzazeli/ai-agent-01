@@ -19,9 +19,9 @@
 - [x] Format it according to the MCP specification and print it to `System.out`.
 
 ### Day 16: Executing Tools (`tools/call`)
-- [ ] Add a block to check if the incoming method is `tools/call`.
-- [ ] If it is, extract the `name` (check_container_status) and `arguments` (immich).
-- [ ] Copy your `executeLocalCommand(containerName)` method from your agent into this server. Run it here, and output the result as a JSON-RPC response to `System.out`.
+- [x] Add a block to check if the incoming method is `tools/call`.
+- [x] If it is, extract the `name` (check_container_status) and `arguments` (immich).
+- [x] Copy your `executeLocalCommand(containerName)` method from your agent into this server. Run it here, and output the result as a JSON-RPC response to `System.out`.
 
 ### Day 17: JSON-RPC Error Handling
 - [ ] Implement basic error handling. If the client requests a tool that doesn't exist, return a JSON-RPC error object (code `-32601` for Method Not Found) to `System.out`.
