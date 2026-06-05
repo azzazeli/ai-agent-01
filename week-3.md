@@ -27,6 +27,6 @@
 - [x] Implement basic error handling. If the client requests a tool that doesn't exist, return a JSON-RPC error object (code `-32601` for Method Not Found) to `System.out`.
 
 ### Day 18: Manual Server Testing
-- [ ] Run your `McpServer` application.
-- [ ] Type a raw JSON-RPC string into your terminal (e.g., `{"jsonrpc": "2.0", "id": 1, "method": "initialize"}`) and hit enter.
-- [ ] Verify your server instantly spits back the correct JSON initialization response to the terminal.
+- [x] Run your `McpServer` application.
+- [x] Type a raw JSON-RPC string into your terminal (e.g., `{"jsonrpc": "2.0", "id": 1, "method": "initialize"}`) and hit enter.
+- [x] Verify your server instantly spits back the correct JSON initialization response to the terminal.
