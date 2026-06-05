@@ -24,7 +24,7 @@
 - [x] Copy your `executeLocalCommand(containerName)` method from your agent into this server. Run it here, and output the result as a JSON-RPC response to `System.out`.
 
 ### Day 17: JSON-RPC Error Handling
-- [ ] Implement basic error handling. If the client requests a tool that doesn't exist, return a JSON-RPC error object (code `-32601` for Method Not Found) to `System.out`.
+- [x] Implement basic error handling. If the client requests a tool that doesn't exist, return a JSON-RPC error object (code `-32601` for Method Not Found) to `System.out`.
 
 ### Day 18: Manual Server Testing
 - [ ] Run your `McpServer` application.

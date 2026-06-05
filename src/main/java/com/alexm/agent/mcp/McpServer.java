@@ -137,14 +137,22 @@ public class McpServer {
                             result.set("content", contentArray);
 
                             response.set("result", result);
-                            // CRITICAL: Send the JSON response to standard output!
-                            System.out.println(response.toString());
                         }
                         else {
-                            // A placeholder for Day 17: Error handling
-                            System.err.println("[SERVER] Unknown tool requested.");
+                            // NEW: Official JSON-RPC Error Handling
+                            System.err.println("[SERVER] Error: Unknown tool requested -> " + toolName);
+
+                            ObjectNode errorNode = mapper.createObjectNode();
+                            errorNode.put("code", -32601);
+                            errorNode.put("message", "Method not found: Unknown tool '" + toolName + "'");
+
+                            // Attach the error node instead of a result node
+                            response.set("error", errorNode);
                         }
+                        // CRITICAL: Send the JSON response to standard output!
+                        System.out.println(response.toString());
                     }
+
                 }
 
             } catch (Exception e) {
