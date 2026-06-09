@@ -56,6 +56,48 @@ public class StatefulAgent {
             }
         }));
 
+
+        // --- DAY 20: Stream Wiring & The Handshake ---
+        System.out.println("[SYSTEM] Wiring streams to MCP Server...");
+
+        // The Agent writes to the Server's System.in
+        java.io.BufferedWriter mcpWriter = new java.io.BufferedWriter(new java.io.OutputStreamWriter(mcpProcess.getOutputStream()));
+        // The Agent reads from the Server's System.out
+        java.io.BufferedReader mcpReader = new java.io.BufferedReader(new java.io.InputStreamReader(mcpProcess.getInputStream()));
+
+        try {
+            System.out.println("[SYSTEM] Sending 'initialize' handshake...");
+
+            // 1. Build the initialize JSON-RPC request
+            ObjectNode initRequest = mapper.createObjectNode();
+            initRequest.put("jsonrpc", "2.0");
+            initRequest.put("id", 1); // Track the request ID
+            initRequest.put("method", "initialize");
+
+            ObjectNode params = mapper.createObjectNode();
+            params.put("protocolVersion", "2024-11-05");
+            params.set("capabilities", mapper.createObjectNode());
+            initRequest.set("params", params);
+
+            mcpWriter.write(initRequest.toString() + "\n");
+            mcpWriter.flush();
+
+            // 3. Read the server's response
+            String initResponseStr = mcpReader.readLine();
+
+            // 4. Validate the handshake
+            JsonNode initResponseNode = mapper.readTree(initResponseStr);
+            if (initResponseNode.has("result") && initResponseNode.get("result").has("protocolVersion")) {
+                System.out.println("[SYSTEM] Handshake successful! Connected to: " +
+                        initResponseNode.get("result").path("serverInfo").path("name").asText());
+            } else {
+                System.err.println("[SYSTEM] Handshake failed. Unexpected response: " + initResponseStr);
+            }
+        } catch (Exception e) {
+            System.err.println("[SYSTEM] Failed to communicate with MCP Server: " + e.getMessage());
+            return;
+        }
+
         // --- Memory & Persona Initialization ---
         ArrayNode history = mapper.createArrayNode();
 
