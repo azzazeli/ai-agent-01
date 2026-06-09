@@ -26,11 +26,11 @@ The agent becomes the **MCP host**. The server becomes a **black box** — the a
 ---
 
 ### Day 19: Spawn the Server Process
-- [ ] Create a new class `McpClientAgent.java` alongside your existing `AgentApplication.java`.
-- [ ] Write a `spawnMcpServer()` method that uses `ProcessBuilder` to launch `McpServer.java` as a child process.
-- [ ] Wire up the streams: get `OutputStream` (→ server's stdin) and `InputStream` (← server's stdout) from the process.
-- [ ] Wrap them in a `BufferedWriter` and `BufferedReader` for line-by-line communication.
-- [ ] Verify the process starts: write a raw line to the server and confirm you can read a response back.
+- [x] Create a new class `McpClientAgent.java` alongside your existing `AgentApplication.java`.
+- [x] Write a `spawnMcpServer()` method that uses `ProcessBuilder` to launch `McpServer.java` as a child process.
+- [x] Wire up the streams: get `OutputStream` (→ server's stdin) and `InputStream` (← server's stdout) from the process.
+- [x] Wrap them in a `BufferedWriter` and `BufferedReader` for line-by-line communication.
+- [x] Verify the process starts: write a raw line to the server and confirm you can read a response back.
 
 **Key concept:** The same `ProcessBuilder` you used in Week 2 to run `docker ps` is now used to run your own Java server. The streams work identically — you write lines in, you read lines out.
 

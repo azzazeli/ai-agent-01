@@ -5,16 +5,14 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Scanner;
-import java.util.stream.Collectors;
 
 public class StatefulAgent {
+
     public static void main(String[] args) {
         String apiKey = System.getenv("GEMINI_API_KEY");
         if (apiKey == null || apiKey.isEmpty()) {
@@ -28,7 +26,37 @@ public class StatefulAgent {
         ObjectMapper mapper = new ObjectMapper();
         Scanner scanner = new Scanner(System.in);
 
-        // 1. Initialize the shared memory structure (The "contents" array)
+        // --- DAY 19: Booting the MCP Server ---
+        System.out.println("[SYSTEM] Booting MCP Server in the background...");
+        Process mcpProcess = null;
+        try {
+            String currentClasspath = System.getProperty("java.class.path");
+            // Launch the compiled McpServer class from the Gradle output directory
+            ProcessBuilder pb = new ProcessBuilder("java",
+                    "-cp", currentClasspath,
+                    "com.alexm.agent.mcp.McpServer");
+
+            // Inherit the error stream so the Server's System.err logs show up in our terminal
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+            mcpProcess = pb.start();
+            System.out.println("[SYSTEM] MCP Server running.");
+
+        } catch (Exception e) {
+            System.err.println("Failed to start MCP Server: " + e.getMessage());
+            return;
+        }
+
+        // Graceful shutdown hook to avoid zombie processes
+        final Process finalMcpProcess = mcpProcess;
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("\n[SYSTEM] Shutting down MCP Server...");
+            if (finalMcpProcess != null) {
+                finalMcpProcess.destroy();
+            }
+        }));
+
+        // --- Memory & Persona Initialization ---
         ArrayNode history = mapper.createArrayNode();
 
         ObjectNode systemInstruction = mapper.createObjectNode();
@@ -36,39 +64,9 @@ public class StatefulAgent {
                 .addObject()
                 .put("text", "You are a strict, terminal-only infrastructure assistant managing a home lab running Ubuntu. Keep answers concise.");
 
-        // --- 2.5 Define the Tools Schema ---
-        ArrayNode toolsArray = mapper.createArrayNode();
-        ObjectNode toolNode = mapper.createObjectNode();
-        ArrayNode functionDeclarations = mapper.createArrayNode();
-
-        ObjectNode checkStatusFunction = mapper.createObjectNode();
-        checkStatusFunction.put("name", "check_container_status");
-        checkStatusFunction.put("description", "Checks if a specific local docker container is running.");
-
-        // Define the parameters the LLM must provide to use this tool
-        ObjectNode parameters = mapper.createObjectNode();
-        parameters.put("type", "OBJECT");
-
-        ObjectNode properties = mapper.createObjectNode();
-        ObjectNode containerNameProp = mapper.createObjectNode();
-        containerNameProp.put("type", "STRING");
-        containerNameProp.put("description", "The name of the docker container to check (e.g., immich, paperless-ngx)");
-
-        properties.set("container_name", containerNameProp);
-        parameters.set("properties", properties);
-
-        ArrayNode required = mapper.createArrayNode();
-        required.add("container_name");
-        parameters.set("required", required);
-
-        checkStatusFunction.set("parameters", parameters);
-        functionDeclarations.add(checkStatusFunction);
-        toolNode.set("functionDeclarations", functionDeclarations);
-        toolsArray.add(toolNode);
-
         System.out.println("System initialized. Chat session started. Type 'exit' to quit.\n");
 
-        // 3. The Execution Loop
+        // --- The Execution Loop ---
         while (true) {
             System.out.print("You: ");
             String userInput = scanner.nextLine();
@@ -79,19 +77,18 @@ public class StatefulAgent {
             }
 
             try {
-                // --- A. Append User Input to History ---
+                // 1. Append User Input
                 ObjectNode userMessage = mapper.createObjectNode();
                 userMessage.put("role", "user");
                 userMessage.putArray("parts").addObject().put("text", userInput);
                 history.add(userMessage);
 
-                // --- B. Build the Final Payload ---
+                // 2. Build Payload (Notice: toolsArray is temporarily gone!)
                 ObjectNode payload = mapper.createObjectNode();
                 payload.set("systemInstruction", systemInstruction);
-                payload.set("tools", toolsArray);
-                payload.set("contents", history); // The payload now grows with every loop
+                payload.set("contents", history);
 
-                // --- C. Execute the Network Call ---
+                // 3. Send HTTP Request
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Content-Type", "application/json")
@@ -100,128 +97,38 @@ public class StatefulAgent {
 
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-                // --- D. Parse the Response ---
+                // 4. Parse Response
                 JsonNode rootNode = mapper.readTree(response.body());
+                JsonNode firstPart = rootNode.path("candidates").path(0).path("content").path("parts").path(0);
 
-                // Navigate to the first "part" of the response
-                JsonNode firstPart = rootNode.path("candidates").path(0)
-                        .path("content").path("parts").path(0);
-
+                // 5. Handle Intent
                 if (firstPart.has("functionCall")) {
                     JsonNode functionCall = firstPart.path("functionCall");
-                    String functionName = functionCall.path("name").asText();
-                    String containerName = functionCall.path("args").path("container_name").asText();
                     System.out.println("\n>>> [SYSTEM: TOOL CALL DETECTED] <<<");
-                    System.out.println("The agent is executing: " + functionName + " for '" + containerName + "'");
+                    System.out.println("The agent wants to run: " + functionCall.path("name").asText());
 
-                    // --- STEP A: Run the Local Command ---
-                    String commandResult = executeLocalCommand(containerName);
-                    System.out.println("Command Output: " + commandResult);
+                    // The old executeLocalCommand() is gone. We will wire this to the MCP Server in Days 22-23.
+                    System.out.println("[TODO] Days 22/23: Forward this execution request to the MCP Server via stdout!");
                     System.out.println("------------------------------------\n");
 
-                    // --- STEP B: Update History with the Model's Request ---
-                    // The LLM needs to see its own functionCall in the history
-                    ObjectNode modelToolCallMessage = mapper.createObjectNode();
-                    modelToolCallMessage.put("role", "model");
-                    modelToolCallMessage.putArray("parts").add(firstPart);
-                    history.add(modelToolCallMessage);
-
-                    // --- STEP C: Format the Result as a functionResponse ---
-                    ObjectNode functionMessage = mapper.createObjectNode();
-                    functionMessage.put("role", "function"); // Gemini uses "function" for tool returns
-
-                    ObjectNode functionResponseNode = mapper.createObjectNode();
-                    functionResponseNode.put("name", functionName);
-
-                    // Put the raw Docker string into a JSON object for the model to read
-                    ObjectNode responseData = mapper.createObjectNode();
-                    responseData.put("result", commandResult);
-                    functionResponseNode.set("response", responseData);
-
-                    ObjectNode partNode = mapper.createObjectNode();
-                    partNode.set("functionResponse", functionResponseNode);
-
-                    functionMessage.putArray("parts").add(partNode);
-                    history.add(functionMessage); // Add our execution result to the history
-
-                    // --- STEP D: The Second HTTP Call (The Return Trip) ---
-                    System.out.println("[SYSTEM] Sending execution result back to Gemini...");
-
-                    ObjectNode secondPayload = mapper.createObjectNode();
-                    secondPayload.set("systemInstruction", systemInstruction);
-                    secondPayload.set("tools", toolsArray);
-                    secondPayload.set("contents", history);
-
-                    HttpRequest secondRequest = HttpRequest.newBuilder()
-                            .uri(URI.create(url))
-                            .header("Content-Type", "application/json")
-                            .POST(HttpRequest.BodyPublishers.ofString(secondPayload.toString()))
-                            .build();
-
-                    HttpResponse<String> secondResponse = client.send(secondRequest, HttpResponse.BodyHandlers.ofString());
-
-                    // --- STEP E: Parse the Final Human-Readable Answer ---
-                    JsonNode secondRootNode = mapper.readTree(secondResponse.body());
-                    String finalAssistantText = secondRootNode.path("candidates").path(0)
-                            .path("content").path("parts").path(0)
-                            .path("text").asText();
-
-                    System.out.println("Agent: " + finalAssistantText + "\n");
-
-                    // Append the final answer to history so the loop continues normally
-                    ObjectNode finalAssistantMessage = mapper.createObjectNode();
-                    finalAssistantMessage.put("role", "model");
-                    finalAssistantMessage.putArray("parts").addObject().put("text", finalAssistantText);
-                    history.add(finalAssistantMessage);
                 }
-                // 2. Otherwise, handle it as a standard text conversation
                 else if (firstPart.has("text")) {
                     String assistantText = firstPart.path("text").asText();
                     System.out.println("Agent: " + assistantText + "\n");
 
-                    // Append Assistant Response to History
                     ObjectNode assistantMessage = mapper.createObjectNode();
                     assistantMessage.put("role", "model");
                     assistantMessage.putArray("parts").addObject().put("text", assistantText);
                     history.add(assistantMessage);
-
                 } else {
                     System.out.println("Received an unknown response format.");
                 }
+
             } catch (Exception e) {
                 System.err.println("Error communicating with API: " + e.getMessage());
             }
         }
+
+        scanner.close();
     }
-
-    public static String executeLocalCommand(String containerName) {
-        System.out.println("[SYSTEM] Executing local check for: " + containerName);
-        try {
-            // Using a list of arguments is safer than a raw bash string
-            ProcessBuilder processBuilder = new ProcessBuilder(
-                    "docker", "ps", "--filter", "name=" + containerName, "--format", "{{.Names}} - Status: {{.Status}}"
-            );
-            // Redirect error stream so we can see if docker fails (e.g., permissions)
-            processBuilder.redirectErrorStream(true);
-            Process process = processBuilder.start();
-
-            // Read the terminal output
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String output = reader.lines().collect(Collectors.joining("\n"));
-
-            int exitCode = process.waitFor();
-
-            if (output.trim().isEmpty()) {
-                return "Container '" + containerName + "' is not currently running or does not exist.";
-            }
-            System.out.println("Terminal output: " + output );
-
-            return output;
-        } catch (Exception e) {
-            return "Error executing command: " + e.getMessage();
-        }
-    }
-
 }
-
-
