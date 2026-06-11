@@ -37,21 +37,21 @@ The agent becomes the **MCP host**. The server becomes a **black box** — the a
 ---
 
 ### Day 20: The Initialize Handshake
-- [ ] Write a `sendRequest(BufferedWriter writer, String json)` helper that writes a JSON line and flushes.
-- [ ] Write a `readResponse(BufferedReader reader)` helper that reads the next non-empty line.
-- [ ] Send the `initialize` JSON-RPC message to the server.
-- [ ] Parse the response with Jackson and log the server's `name` and `protocolVersion` to confirm the handshake succeeded.
+- [x] Write a `sendRequest(BufferedWriter writer, String json)` helper that writes a JSON line and flushes.
+- [x] Write a `readResponse(BufferedReader reader)` helper that reads the next non-empty line.
+- [x] Send the `initialize` JSON-RPC message to the server.
+- [x] Parse the response with Jackson and log the server's `name` and `protocolVersion` to confirm the handshake succeeded.
 
 **Key concept:** You are now on the *other side* of the protocol you built last week. Everything you designed in `McpServer.java` — the flush, the single-line output, the id field — you'll feel the consequences of here as the client.
 
 ---
 
 ### Day 21: Dynamic Tool Discovery
-- [ ] Send `tools/list` to the server.
-- [ ] Parse the response: extract the `tools` array.
-- [ ] Write a converter method: `mcpToolsToGeminiFunctionDeclarations(JsonNode tools)` that transforms each MCP `inputSchema` into a Gemini `functionDeclaration`.
-- [ ] Log the converted declarations to confirm the shapes are correct.
-- [ ] Pass the converted declarations into the Gemini request payload as the `tools` array — replacing the hardcoded schema from Week 2.
+- [x] Send `tools/list` to the server.
+- [x] Parse the response: extract the `tools` array.
+- [x] Write a converter method: `mcpToolsToGeminiFunctionDeclarations(JsonNode tools)` that transforms each MCP `inputSchema` into a Gemini `functionDeclaration`.
+- [x] Log the converted declarations to confirm the shapes are correct.
+- [x] Pass the converted declarations into the Gemini request payload as the `tools` array — replacing the hardcoded schema from Week 2.
 
 **Key concept:** This is the payoff of learning both sides. You know the MCP shape (`inputSchema`) and the Gemini shape (`functionDeclaration`) by hand — so the conversion is mechanical, not magical.
 

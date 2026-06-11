@@ -98,6 +98,61 @@ public class StatefulAgent {
             return;
         }
 
+        // --- DAY 21: Dynamic Tool Discovery & Translation ---
+        System.out.println("[SYSTEM] Requesting available tools from Server...");
+        ArrayNode geminiToolsArray = mapper.createArrayNode();
+
+        try {
+            // 1. Ask the server for its tools
+            ObjectNode toolsRequest = mapper.createObjectNode();
+            toolsRequest.put("jsonrpc", "2.0");
+            toolsRequest.put("id", 2);
+            toolsRequest.put("method", "tools/list");
+
+            mcpWriter.write(toolsRequest.toString() + "\n");
+            mcpWriter.flush();
+
+            // 2. Read the server's response
+            String toolsResponseStr = mcpReader.readLine();
+            JsonNode toolsResponseNode = mapper.readTree(toolsResponseStr);
+
+            // 3. Translate MCP schema to Gemini schema
+            if (toolsResponseNode.has("result") && toolsResponseNode.get("result").has("tools")) {
+                JsonNode mcpTools = toolsResponseNode.get("result").get("tools");
+                ArrayNode functionDeclarations = mapper.createArrayNode();
+
+                for (JsonNode mcpTool : mcpTools) {
+                    String toolName = mcpTool.get("name").asText();
+                    System.out.println("[SYSTEM] Discovered tool: " + toolName);
+
+                    ObjectNode geminiFunction = mapper.createObjectNode();
+                    geminiFunction.put("name", toolName);
+
+                    if (mcpTool.has("description")) {
+                        geminiFunction.put("description", mcpTool.get("description").asText());
+                    }
+                    if (mcpTool.has("inputSchema")) {
+                        // The beauty of this: Gemini's "parameters" exactly matches standard JSON Schema objects
+                        geminiFunction.set("parameters", mcpTool.get("inputSchema"));
+                    }
+
+                    functionDeclarations.add(geminiFunction);
+                }
+
+                // Wrap in the Gemini root "tools" structure
+                ObjectNode toolNode = mapper.createObjectNode();
+                toolNode.set("functionDeclarations", functionDeclarations);
+                geminiToolsArray.add(toolNode);
+
+                System.out.println("[SYSTEM] Successfully translated tools for Gemini.");
+            }
+
+        } catch (Exception e) {
+            System.err.println("[SYSTEM] Tool discovery failed: " + e.getMessage());
+            return;
+        }
+
+
         // --- Memory & Persona Initialization ---
         ArrayNode history = mapper.createArrayNode();
 
@@ -128,6 +183,10 @@ public class StatefulAgent {
                 // 2. Build Payload (Notice: toolsArray is temporarily gone!)
                 ObjectNode payload = mapper.createObjectNode();
                 payload.set("systemInstruction", systemInstruction);
+                // --- Add this line back! ---
+                if (!geminiToolsArray.isEmpty()) {
+                    payload.set("tools", geminiToolsArray);
+                }
                 payload.set("contents", history);
 
                 // 3. Send HTTP Request
