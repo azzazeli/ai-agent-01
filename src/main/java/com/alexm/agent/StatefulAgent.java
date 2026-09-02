@@ -205,13 +205,36 @@ public class StatefulAgent {
                 // 5. Handle Intent
                 if (firstPart.has("functionCall")) {
                     JsonNode functionCall = firstPart.path("functionCall");
-                    System.out.println("\n>>> [SYSTEM: TOOL CALL DETECTED] <<<");
-                    System.out.println("The agent wants to run: " + functionCall.path("name").asText());
+                    String functionName = functionCall.path("name").asText();
+                    JsonNode functionArgs = functionCall.path("args");
 
-                    // The old executeLocalCommand() is gone. We will wire this to the MCP Server in Days 22-23.
-                    System.out.println("[TODO] Days 22/23: Forward this execution request to the MCP Server via stdout!");
+                    System.out.println("\n>>> [SYSTEM: TOOL CALL DETECTED] <<<");
+                    System.out.println("The LLM requested: " + functionName + " with args " + functionArgs.toString());
+
+                    // --- DAY 22: Forwarding the Request to the MCP Server ---
+                    System.out.println("[SYSTEM] Forwarding execution request to MCP Server...");
+
+                    ObjectNode toolCallRequest = mapper.createObjectNode();
+                    toolCallRequest.put("jsonrpc", "2.0");
+                    toolCallRequest.put("id", 3); // Message ID
+                    toolCallRequest.put("method", "tools/call");
+
+                    ObjectNode mcpParams = mapper.createObjectNode();
+                    mcpParams.put("name", functionName);
+                    // The beauty of this: Gemini's "args" perfectly matches MCP's "arguments" schema
+                    mcpParams.set("arguments", functionArgs);
+                    toolCallRequest.set("params", mcpParams);
+
+                    // Send the request down the pipe to the background server
+                    mcpWriter.write(toolCallRequest.toString() + "\n");
+                    mcpWriter.flush();
+
+                    // Immediately read the execution result back from the server
+                    String mcpResponseStr = mcpReader.readLine();
+                    System.out.println("[SYSTEM] Raw Result from Server: " + mcpResponseStr);
                     System.out.println("------------------------------------\n");
 
+                    // [TODO] Day 23: Format this result and send it back to Gemini so it can answer!
                 }
                 else if (firstPart.has("text")) {
                     String assistantText = firstPart.path("text").asText();

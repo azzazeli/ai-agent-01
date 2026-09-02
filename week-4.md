@@ -58,9 +58,9 @@ The agent becomes the **MCP host**. The server becomes a **black box** — the a
 ---
 
 ### Day 22: Routing Tool Calls to the Server
-- [ ] In the agent's main loop, when Gemini returns a `functionCall`, instead of executing it locally, build a `tools/call` JSON-RPC request and send it to the MCP server.
-- [ ] Read the server's response and extract the `content[0].text` result.
-- [ ] Return that result string back into the agent loop as the tool output.
+- [x] In the agent's main loop, when Gemini returns a `functionCall`, instead of executing it locally, build a `tools/call` JSON-RPC request and send it to the MCP server.
+- [x] Read the server's response and extract the `content[0].text` result.
+- [x] Return that result string back into the agent loop as the tool output.
 
 **Key concept:** The agent becomes a router. It no longer knows what tools do — it only knows how to ask the server to do them and pass the result back.
 
