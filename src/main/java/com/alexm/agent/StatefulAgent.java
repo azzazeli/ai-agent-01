@@ -234,7 +234,83 @@ public class StatefulAgent {
                     System.out.println("[SYSTEM] Raw Result from Server: " + mcpResponseStr);
                     System.out.println("------------------------------------\n");
 
-                    // [TODO] Day 23: Format this result and send it back to Gemini so it can answer!
+                    // --- DAY 23: The Final Return Trip ---
+                    System.out.println("[SYSTEM] Sending execution result back to Gemini...");
+
+                    // 1. Extract the actual text from the MCP Server's JSON-RPC response
+                    JsonNode mcpResponseNode = mapper.readTree(mcpResponseStr);
+                    System.out.println("[DEBUG] The Server actually sent: " + mcpResponseStr);
+
+                    String executionResultText;
+
+                    if (mcpResponseNode.has("result")) {
+                        // Success path: extract the text from the MCP content array
+                        executionResultText = mcpResponseNode.get("result").path("content").get(0).path("text").asText();
+                    } else if (mcpResponseNode.has("error")) {
+                        // Error path: extract the JSON-RPC error message
+                        executionResultText = mcpResponseNode.get("error").path("message").asText();
+                    } else {
+                        executionResultText = "Unknown error occurred during tool execution.";
+                    }
+
+                    // 2. Append the Model's ORIGINAL request to history (Gemini requires this)
+                    ObjectNode modelToolCallMessage = mapper.createObjectNode();
+                    modelToolCallMessage.put("role", "model");
+                    modelToolCallMessage.putArray("parts").add(firstPart); // firstPart contains the functionCall
+                    history.add(modelToolCallMessage);
+
+                    // 3. Append the execution result to history (as a functionResponse)
+                    ObjectNode functionMessage = mapper.createObjectNode();
+                    functionMessage.put("role", "user");
+
+                    ObjectNode functionResponseNode = mapper.createObjectNode();
+                    functionResponseNode.put("name", functionName);
+
+                    ObjectNode responseData = mapper.createObjectNode();
+                    responseData.put("result", executionResultText);
+                    functionResponseNode.set("response", responseData);
+
+                    ObjectNode partNode = mapper.createObjectNode();
+                    partNode.set("functionResponse", functionResponseNode);
+
+                    functionMessage.putArray("parts").add(partNode);
+                    history.add(functionMessage);
+
+                    // 4. Fire the second HTTP request to let the LLM read the result
+                    ObjectNode secondPayload = mapper.createObjectNode();
+                    secondPayload.set("systemInstruction", systemInstruction);
+                    if (!geminiToolsArray.isEmpty()) {
+                        secondPayload.set("tools", geminiToolsArray);
+                    }
+                    secondPayload.set("contents", history);
+
+                    HttpRequest secondRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(url))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(secondPayload.toString()))
+                            .build();
+                    HttpResponse<String> secondResponse = client.send(secondRequest, HttpResponse.BodyHandlers.ofString());
+
+                    // --- ADD THIS SAFETY CHECK ---
+                    if (secondResponse.statusCode() != 200) {
+                        System.err.println("[API ERROR] Gemini rejected the return trip: " + secondResponse.body());
+                        continue; // Skip the rest of the loop so we don't corrupt history
+                    }
+
+                    // 5. Parse and print the final natural language answer!
+                    JsonNode secondRootNode = mapper.readTree(secondResponse.body());
+                    String finalAssistantText = secondRootNode.path("candidates").path(0)
+                            .path("content").path("parts").path(0)
+                            .path("text").asText();
+
+                    System.out.println("Agent: " + finalAssistantText + "\n");
+
+                    // 6. Append this final answer to history so the loop continues seamlessly
+                    ObjectNode finalAssistantMessage = mapper.createObjectNode();
+                    finalAssistantMessage.put("role", "model");
+                    finalAssistantMessage.putArray("parts").addObject().put("text", finalAssistantText);
+                    history.add(finalAssistantMessage);
+
                 }
                 else if (firstPart.has("text")) {
                     String assistantText = firstPart.path("text").asText();

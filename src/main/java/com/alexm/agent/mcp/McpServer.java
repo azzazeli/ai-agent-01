@@ -164,7 +164,7 @@ public class McpServer {
     }
 
     public static String executeLocalCommand(String containerName) {
-        System.out.println("[SYSTEM] Executing local check for: " + containerName);
+        System.err.println("[SYSTEM] Executing local check for: " + containerName);
         try {
             // Using a list of arguments is safer than a raw bash string
             ProcessBuilder processBuilder = new ProcessBuilder(
@@ -183,7 +183,7 @@ public class McpServer {
             if (output.trim().isEmpty()) {
                 return "Container '" + containerName + "' is not currently running or does not exist.";
             }
-            System.out.println("Terminal output: " + output );
+            System.err.println("Terminal output: " + output );
 
             return output;
         } catch (Exception e) {
